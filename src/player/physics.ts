@@ -25,6 +25,7 @@ export function makePlayer(
     wall: 0,
     coyote: 0,
     buffer: 0,
+    jumpGrace: 0,
     hp,
     maxHp,
     energy: maxEnergy,
@@ -58,6 +59,7 @@ export function movePlayer(
   const wasGrounded = p.grounded;
   p.coyote = p.grounded ? 0.11 : Math.max(0, p.coyote - dt);
   p.buffer = input.tap("jump") ? 0.14 : Math.max(0, p.buffer - dt);
+  p.jumpGrace = Math.max(0, p.jumpGrace - dt);
   p.dashCooldown = Math.max(0, p.dashCooldown - dt);
   p.invuln = Math.max(0, p.invuln - dt);
   p.parry = Math.max(0, p.parry - dt);
@@ -70,7 +72,8 @@ export function movePlayer(
   if (axis) p.dir = axis;
   if (p.buffer > 0 && (p.coyote > 0 || p.wall)) {
     const wall = p.wall;
-    p.vy = -650;
+    p.vy = -760;
+    p.jumpGrace = 0.12;
     p.vx = wall ? -wall * 470 : p.vx;
     p.buffer = 0;
     p.coyote = 0;
@@ -99,7 +102,7 @@ export function movePlayer(
       p.heal ? 0 : axis * 310,
       dt * (p.grounded ? 2400 : 1250),
     );
-    if (p.vy < 0 && !input.down("jump")) p.vy += 2300 * dt;
+    if (p.vy < 0 && !input.down("jump") && p.jumpGrace <= 0) p.vy += 2300 * dt;
     p.vy = Math.min(1000, p.vy + (p.vy > 0 ? 2050 : 1650) * dt);
     if (p.wall && axis && p.vy > 125) p.vy = 125;
   }
@@ -107,6 +110,13 @@ export function movePlayer(
   p.wall = 0;
   for (const r of platforms) {
     if (overlaps(p, r)) {
+      // Forgive a small near-top corner overlap instead of treating it as a wall.
+      const lip = p.y + p.h - r.y;
+      if (p.vy <= 0 && lip >= 0 && lip <= 8 && p.y < r.y) {
+        p.y = r.y - p.h;
+        p.vy = 0;
+        continue;
+      }
       if (p.vx > 0) {
         p.x = r.x - p.w;
         p.wall = 1;

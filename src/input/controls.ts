@@ -58,6 +58,10 @@ export class Input {
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) this.clear();
     });
+    const shell = document.querySelector("#game-shell");
+    shell?.addEventListener("contextmenu", (e) => e.preventDefault());
+    shell?.addEventListener("selectstart", (e) => e.preventDefault());
+    shell?.addEventListener("dragstart", (e) => e.preventDefault());
     document.querySelectorAll<HTMLElement>("[data-action]").forEach((b) => {
       b.addEventListener("pointerdown", (e) => {
         e.preventDefault();

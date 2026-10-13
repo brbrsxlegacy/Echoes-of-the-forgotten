@@ -83,7 +83,7 @@ await check("Real keyboard movement, jumping, landing", async () => {
   await page.waitForTimeout(180);
   assert.ok((await state()).p.y < before.p.y - 45);
   await page.keyboard.up("Space");
-  await page.waitForTimeout(650);
+  await page.waitForFunction(() => window.__game.player.grounded);
   assert.equal((await state()).p.grounded, true);
 });
 await check(
@@ -381,6 +381,59 @@ await check("Mobile landscape menu and actual pointer controls", async () => {
   await mp.waitForTimeout(120);
   assert.ok((await mp.evaluate(() => window.__game.player.y)) < 660);
   await mp.screenshot({ path: "test-output/mobile.png" });
+});
+
+await check(
+  "Portrait iPhone viewport fills the play area without stretching or hiding Nilo",
+  async () => {
+    await mp.setViewportSize({ width: 390, height: 844 });
+    await mp.waitForFunction(() => window.__game.renderer.w < 700);
+    const geometry = await mp.evaluate(() => {
+      const g = window.__game,
+        c = document.querySelector("canvas"),
+        r = c.getBoundingClientRect();
+      return {
+        width: r.width,
+        height: r.height,
+        logical: g.renderer.w,
+        ratio: c.width / c.height,
+        playerX: g.player.x + 17 - g.camera.x,
+        viewport: r.width / r.height,
+      };
+    });
+    assert.ok(geometry.height > 550);
+    assert.ok(Math.abs(geometry.ratio - geometry.viewport) < 0.01);
+    assert.ok(geometry.playerX >= 0 && geometry.playerX <= geometry.logical);
+    await mp.screenshot({ path: "test-output/portrait-fixed.png" });
+  },
+);
+await check(
+  "Holding controls cannot select text or open a canvas context menu",
+  async () => {
+    const result = await mp.evaluate(() => {
+      const c = document.querySelector("canvas");
+      const e = new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+      });
+      c.dispatchEvent(e);
+      const s = new Event("selectstart", { bubbles: true, cancelable: true });
+      c.dispatchEvent(s);
+      return {
+        menu: e.defaultPrevented,
+        selection: s.defaultPrevented,
+        css: getComputedStyle(c).webkitUserSelect,
+      };
+    });
+    assert.equal(result.menu, true);
+    assert.equal(result.selection, true);
+    assert.equal(result.css, "none");
+  },
+);
+await check("Rotating back to landscape restores the wide camera", async () => {
+  await mp.setViewportSize({ width: 844, height: 390 });
+  await mp.waitForFunction(() => window.__game.renderer.w === 1280);
+  assert.equal(await mp.locator('[data-action="jump"]').isVisible(), true);
 });
 await check("No critical browser console errors", async () =>
   assert.deepEqual(errors, []),

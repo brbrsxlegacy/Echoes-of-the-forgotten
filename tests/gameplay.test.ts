@@ -209,6 +209,7 @@ test("touch actions release after pointer cancellation and gamepad mapping/disco
     document: {
       hidden: false,
       addEventListener: () => {},
+      querySelector: () => null,
       querySelectorAll: () => [
         {
           dataset: { action: "jump" },

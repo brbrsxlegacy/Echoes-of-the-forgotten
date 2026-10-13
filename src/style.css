@@ -728,3 +728,57 @@ kbd {
     display: block;
   }
 }
+
+/* Prevent iOS text selection/callouts while holding game controls. */
+#game-shell,
+#game-shell canvas,
+#game-shell button,
+#touch,
+#touch * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+html,
+body {
+  overscroll-behavior: none;
+}
+#game-shell {
+  height: 100dvh;
+}
+#touch button {
+  touch-action: none;
+}
+@media (max-width: 600px) and (orientation: portrait) {
+  #game-shell.in-game canvas {
+    position: absolute;
+    left: 0;
+    top: max(8px, env(safe-area-inset-top));
+    width: 100%;
+    height: calc(
+      100% - 175px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    );
+    object-fit: contain;
+  }
+  #game-shell.in-game #landscape-hint {
+    display: none;
+  }
+  #game-shell.in-game #quick {
+    top: max(15px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+  }
+  #game-shell.in-game #quick button {
+    width: 32px;
+    height: 32px;
+  }
+  #game-shell.in-game #touch::before {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 170px;
+    background: linear-gradient(transparent, #081b27 24%);
+    pointer-events: none;
+  }
+}

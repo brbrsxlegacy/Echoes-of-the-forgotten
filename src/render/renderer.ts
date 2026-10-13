@@ -25,10 +25,25 @@ export class Renderer {
         ? 1
         : 2,
     );
-    if (`${dpr}` !== this.lastSize) {
-      canvas.width = 1280 * dpr;
+    const rect = canvas.getBoundingClientRect();
+    const previousWidth = this.w;
+    const portrait =
+      this.game.mode !== "title" &&
+      matchMedia("(max-width: 600px) and (orientation: portrait)").matches;
+    this.w = portrait
+      ? Math.max(320, Math.round((720 * rect.width) / Math.max(1, rect.height)))
+      : 1280;
+    if (previousWidth !== this.w && this.game.mode !== "title")
+      this.game.camera.x = clamp(
+        this.game.player.x - this.w * 0.46,
+        0,
+        this.game.room.width - this.w,
+      );
+    const size = `${this.w}:${dpr}`;
+    if (size !== this.lastSize) {
+      canvas.width = this.w * dpr;
       canvas.height = 720 * dpr;
-      this.lastSize = `${dpr}`;
+      this.lastSize = size;
     }
     this.dpr = dpr;
   }
@@ -101,7 +116,7 @@ export class Renderer {
       t = g.time;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     c.fillStyle = "#07121b";
-    c.fillRect(0, 0, 1280, 720);
+    c.fillRect(0, 0, this.w, 720);
     if (!this.assets.images.world) return;
     const title = g.mode === "title";
     const cam = title
@@ -116,7 +131,7 @@ export class Renderer {
       1000,
     );
     c.fillStyle = `rgba(2,15,22,${g.room.tone === 3 ? 0.42 : g.room.tone === 2 ? 0.5 : 0.16})`;
-    c.fillRect(0, 0, 1280, 720);
+    c.fillRect(0, 0, this.w, 720);
     // Independently moving mid-ground architecture, foliage and foreground assets.
     c.save();
     c.translate(-cam.x * 0.45, -cam.y * 0.35);
@@ -152,7 +167,10 @@ export class Renderer {
         c.globalAlpha = 1;
       }
       for (const platform of g.platforms) {
-        if (platform.x + platform.w < cam.x - 150 || platform.x > cam.x + 1400)
+        if (
+          platform.x + platform.w < cam.x - 150 ||
+          platform.x > cam.x + this.w + 150
+        )
           continue;
         const wood = platform.kind === "wood" || platform.kind === "moving";
         if (platform.h > 60) {
@@ -294,8 +312,9 @@ export class Renderer {
     c.save();
     for (let i = 0; i < (low ? 20 : 50); i++) {
       const x =
-        ((((i * 113.27 + t * (8 + (i % 5)) - cam.x * 0.7) % 1360) + 1360) %
-          1360) -
+        ((((i * 113.27 + t * (8 + (i % 5)) - cam.x * 0.7) % (this.w + 80)) +
+          (this.w + 80)) %
+          (this.w + 80)) -
         40;
       const y = ((i * 61.9 + Math.sin(t * 0.6 + i) * 23) % 760) - 20;
       const a = 0.15 + (Math.sin(t + i) + 1) * 0.18;
@@ -320,13 +339,20 @@ export class Renderer {
       gradient.addColorStop(0, "rgba(108,155,166,.07)");
       gradient.addColorStop(1, "transparent");
       c.fillStyle = gradient;
-      c.fillRect(0, 360, 1280, 360);
+      c.fillRect(0, 360, this.w, 360);
     }
-    const v = c.createRadialGradient(640, 340, 230, 640, 340, 800);
+    const v = c.createRadialGradient(
+      this.w / 2,
+      340,
+      Math.min(230, this.w / 3),
+      this.w / 2,
+      340,
+      800,
+    );
     v.addColorStop(0, "transparent");
     v.addColorStop(1, "rgba(0,7,12,.66)");
     c.fillStyle = v;
-    c.fillRect(0, 0, 1280, 720);
+    c.fillRect(0, 0, this.w, 720);
     c.restore();
     if (!title) {
       c.save();
@@ -337,7 +363,7 @@ export class Renderer {
     }
     if (g.transition > 0) {
       c.fillStyle = `rgba(3,12,19,${(g.transition / 0.6) * 0.7})`;
-      c.fillRect(0, 0, 1280, 720);
+      c.fillRect(0, 0, this.w, 720);
     }
   }
   player(t: number) {
@@ -601,7 +627,7 @@ export class Renderer {
     c.fillRect(28, 25, 260, 82);
     for (let i = 0; i < p.maxHp; i++) {
       c.save();
-      c.translate(51 + i * 27, 49);
+      c.translate(51 + i * Math.min(27, (this.w - 150) / p.maxHp), 49);
       c.rotate(Math.PI / 4);
       c.fillStyle =
         p.hp >= i + 1 ? "#e7cd8d" : p.hp > i ? "#9c986f" : "#273b42";
@@ -626,7 +652,7 @@ export class Renderer {
       : g.input.device === "gamepad"
         ? "✕ Zıpla • □ Vur • ○ Dash • L1 Savuştur"
         : "Space Zıpla   J Vur   K Savuştur   L Patlama   H İyileş";
-    this.text(controls, 640, 685, 13, "#9dac9d", "center");
+    this.text(controls, this.w / 2, 685, 13, "#9dac9d", "center");
     this.text("WHISPERING GROVE", 1230, 47, 12, "#a3b0a0", "right");
     this.text(
       `${g.data.discovered.length} / 9  oda`,
@@ -640,32 +666,45 @@ export class Renderer {
       this.text("SHIFT • REZONANS DASH", 1230, 89, 12, "#cbbb83", "right");
     if (g.roomTitle > 0) {
       c.globalAlpha = Math.min(1, g.roomTitle);
-      this.text(g.room.name, 640, 155, 32, "#e8d9b2", "center");
-      this.text(g.room.subtitle, 640, 180, 12, "#98b7b2", "center");
+      this.text(g.room.name, this.w / 2, 155, 32, "#e8d9b2", "center");
+      this.text(g.room.subtitle, this.w / 2, 180, 12, "#98b7b2", "center");
       c.globalAlpha = 1;
     }
     const boss = g.enemies.find((e) => e.kind === "boss" && e.hp > 0);
     if (boss) {
       this.text(
         `ÇAN MUHAFIZI  •  ${["I", "II", "III"][boss.phase - 1]}`,
-        640,
+        this.w / 2,
         605,
         15,
         "#dcc48d",
         "center",
       );
       c.fillStyle = "rgba(3,12,19,.85)";
-      c.fillRect(330, 620, 620, 8);
+      c.fillRect(this.w * 0.25, 620, this.w * 0.5, 8);
       c.fillStyle = "#ac8a56";
-      c.fillRect(330, 620, (620 * boss.hp) / boss.maxHp, 8);
+      c.fillRect(this.w * 0.25, 620, (this.w * 0.5 * boss.hp) / boss.maxHp, 8);
       c.strokeStyle = "#bfaa73";
-      c.strokeRect(328, 618, 624, 12);
+      c.strokeRect(this.w * 0.25 - 2, 618, this.w * 0.5 + 4, 12);
     }
     if (g.toastTimer > 0) {
       c.globalAlpha = Math.min(1, g.toastTimer);
       c.fillStyle = "rgba(5,18,25,.9)";
-      c.fillRect(190, 212, 900, 45);
-      this.text(g.toast, 640, 240, 16, "#e6d2a1", "center");
+      const width = Math.min(900, this.w - 24);
+      const lines: string[] = [];
+      let line = "";
+      for (const word of g.toast.split(" ")) {
+        if ((line + word).length > width / 9) {
+          lines.push(line.trim());
+          line = "";
+        }
+        line += word + " ";
+      }
+      if (line) lines.push(line.trim());
+      c.fillRect((this.w - width) / 2, 212, width, 22 + lines.length * 22);
+      lines.forEach((text, i) =>
+        this.text(text, this.w / 2, 239 + i * 22, 16, "#e6d2a1", "center"),
+      );
     }
     c.restore();
   }

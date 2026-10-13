@@ -1,3 +1,14 @@
+# Jump and mobile hotfix — 0.2.1
+
+- **33 deterministic tests passed, 0 failed**. Platform reachability is now checked with the actual player collision/movement simulation across all nine rooms. Eight pre-boss rooms are reachable without dash using both held jumps and short touch taps; moving platforms are checked at top/center/bottom travel positions. The last room requires the intended dash through its light barrier. Room spawns are checked against terrain and accidental immediate transitions.
+- **18 browser checks passed, 0 failed; zero critical console errors**. Existing gameplay/save/boss checks plus 390×844 portrait layout, visible player/camera, undistorted viewport scaling, blocked text selection/context menus and rotation back to landscape.
+- Jump launch speed changed from 650 to 760; a 120 ms minimum rise supports quick taps while retaining variable-height jumping. Near-top 8 px corner forgiveness prevents catching platform edges. Added thirteen intermediate platforms and lowered awkward first steps. Corrected three spawn placements, including the canopy exit that returned immediately to the previous room.
+- Portrait gameplay now uses a narrower camera and fills the area above the controls. Touch controls remain below the scene. iOS-specific user-select/touch-callout CSS and context/selection/drag prevention cover gameplay and controls.
+- Safari on a physical iPhone was not available. Portrait/touch behavior was verified in Chromium mobile emulation; the native Safari callout suppression is implemented but not claimed as physically tested.
+- Save format remains v2; existing save slots/checkpoints are preserved. Service-worker cache identifier is updated for this release.
+
+---
+
 # Release validation — 2026-10-13
 
 - TypeScript check and Vite production build: PASS. Runtime JS about 59 kB / 22 kB gzip; art atlases approximately 2.8 MB.

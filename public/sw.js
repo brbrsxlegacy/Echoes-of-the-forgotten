@@ -1,4 +1,4 @@
-const CACHE='echoes-v2-20261013';
+const CACHE='echoes-v2-20261013-patch1';
 const PRECACHE=['/','/manifest.webmanifest','/icons/icon-192.png','/icons/icon-512.png','/assets/characters/nilo.webp','/assets/environments/atlas.webp','/assets/environments/grove.webp','/assets/enemies/enemies.webp','/assets/enemies/frames.json'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(PRECACHE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

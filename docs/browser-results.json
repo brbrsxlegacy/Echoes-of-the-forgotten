@@ -57,6 +57,18 @@
       "pass": true
     },
     {
+      "name": "Portrait iPhone viewport fills the play area without stretching or hiding Nilo",
+      "pass": true
+    },
+    {
+      "name": "Holding controls cannot select text or open a canvas context menu",
+      "pass": true
+    },
+    {
+      "name": "Rotating back to landscape restores the wide camera",
+      "pass": true
+    },
+    {
       "name": "No critical browser console errors",
       "pass": true
     }

@@ -62,7 +62,7 @@ export class UI {
     const saved = [0, 1, 2].map((i) => this.g.store.load(i));
     const has = saved.some(Boolean);
     this.shell(
-      `<span class="brand">BRBRS <b>GAMES</b> <i>presents</i></span><div class="title-lockup"><span class="eyebrow">A LOST MELODY. A WORLD WORTH REMEMBERING.</span><h1>ECHOES<span>OF THE</span>FORGOTTEN</h1><div class="ornament">─── ◇ ───</div><p class="subtitle">Unutulanların Yankısı</p></div><div class="menu-list"><button id="continue" ${has ? "" : "disabled"}>Devam Et <small>Continue</small></button><button id="new">Yeni Yolculuk <small>New Game</small></button><button id="load">Kayıtlar <small>Load Game</small></button><button id="settings">Ayarlar <small>Settings</small></button><button id="controls">Kontroller <small>Controls</small></button><button id="credits">Emeği Geçenler <small>Credits</small></button></div><div class="title-footer"><span>WHISPERING GROVE · İLK REZONANS</span><span>0.2 • OYNANABİLİR İLK BÖLÜM</span></div>`,
+      `<span class="brand">BRBRS <b>GAMES</b> <i>presents</i></span><div class="title-lockup"><span class="eyebrow">A LOST MELODY. A WORLD WORTH REMEMBERING.</span><h1>ECHOES<span>OF THE</span>FORGOTTEN</h1><div class="ornament">─── ◇ ───</div><p class="subtitle">Unutulanların Yankısı</p></div><div class="menu-list"><button id="continue" ${has ? "" : "disabled"}>Devam Et <small>Continue</small></button><button id="new">Yeni Yolculuk <small>New Game</small></button><button id="load">Kayıtlar <small>Load Game</small></button><button id="settings">Ayarlar <small>Settings</small></button><button id="controls">Kontroller <small>Controls</small></button><button id="credits">Emeği Geçenler <small>Credits</small></button></div><div class="title-footer"><span>WHISPERING GROVE · İLK REZONANS</span><span>0.2.1 • OYNANABİLİR İLK BÖLÜM</span></div>`,
       "title-view",
     );
     this.bind("continue", () => {
@@ -108,6 +108,10 @@ export class UI {
     this.sync();
   }
   sync() {
+    document
+      .querySelector("#game-shell")!
+      .classList.toggle("in-game", this.g.mode !== "title");
+    this.g.renderer.resize();
     const playing = ["playing", "dialogue", "dead"].includes(this.g.mode);
     document.querySelector<HTMLElement>("#quick")!.hidden = !playing;
     document

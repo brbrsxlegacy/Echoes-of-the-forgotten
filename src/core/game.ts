@@ -133,7 +133,11 @@ export class Game {
     this.audio.set("grove");
     if (!resume) this.save(false);
     if (!resume)
-      this.notify("A / D hareket  •  Space zıpla  •  E konuş / etkileşim");
+      this.notify(
+        navigator.maxTouchPoints > 0
+          ? "ZIPLA: dokun / basılı tut  •  EL: konuş / kaydet"
+          : "A / D hareket  •  Space zıpla  •  E konuş / etkileşim",
+      );
   }
   loadRoom(id: string, x: number, y: number) {
     this.room = rooms[id];
@@ -152,7 +156,11 @@ export class Game {
       .map((e) => makeEnemy(e.kind, e.x, e.y, e.id));
     this.platforms = this.room.platforms.map((p) => ({ ...p, originY: p.y }));
     this.shots = [];
-    this.camera.x = clamp(x - 560, 0, this.room.width - 1280);
+    this.camera.x = clamp(
+      x - this.renderer.w * 0.44,
+      0,
+      this.room.width - this.renderer.w,
+    );
     this.camera.y = clamp(y - 450, 0, this.room.height - 720);
     this.transition = 0.6;
     this.roomTitle = 3.4;
@@ -341,7 +349,11 @@ export class Game {
       }
     }
     p.x = clamp(p.x, 0, this.room.width - p.w);
-    const targetX = clamp(p.x - 590 + p.vx * 0.22, 0, this.room.width - 1280);
+    const targetX = clamp(
+      p.x - this.renderer.w * 0.46 + p.vx * 0.14,
+      0,
+      this.room.width - this.renderer.w,
+    );
     const targetY = clamp(p.y - 430, 0, this.room.height - 720);
     this.camera.x += (targetX - this.camera.x) * Math.min(1, dt * 5);
     this.camera.y += (targetY - this.camera.y) * Math.min(1, dt * 4);

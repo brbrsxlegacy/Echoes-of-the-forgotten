@@ -71,6 +71,7 @@ export interface Player extends Rect {
   wall: number;
   coyote: number;
   buffer: number;
+  jumpGrace: number;
   hp: number;
   maxHp: number;
   energy: number;
