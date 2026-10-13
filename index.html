@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#081923" />
+    <meta
+      name="description"
+      content="Echoes of the Forgotten — BRBRS Games. Veylora'nın kayıp ezgilerini keşfet."
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="icon" href="/icons/icon-192.png" />
+    <title>Echoes of the Forgotten | BRBRS Games</title>
+  </head>
+  <body>
+    <main id="game-shell">
+      <canvas
+        id="game"
+        aria-label="Echoes of the Forgotten oynanış alanı"
+      ></canvas>
+      <div id="overlay" role="dialog" aria-label="Oyun menüsü">
+        <div class="loading">
+          <span class="eyebrow">BRBRS GAMES</span>
+          <h1>Veylora uyanıyor</h1>
+          <div class="load-track"><i id="load-progress"></i></div>
+          <p id="load-label">Ezgiler yükleniyor…</p>
+        </div>
+      </div>
+      <nav id="quick" aria-label="Oyun kısayolları">
+        <button id="map-button" aria-label="Harita">⌘</button
+        ><button id="pause-button" aria-label="Duraklat">Ⅱ</button>
+      </nav>
+      <div id="touch" aria-label="Dokunmatik oyun kontrolleri">
+        <div class="touch-left">
+          <button data-action="left" aria-label="Sola hareket">‹</button
+          ><button data-action="right" aria-label="Sağa hareket">›</button
+          ><button data-action="down" aria-label="Aşağı vuruş">↓</button>
+        </div>
+        <div class="touch-right">
+          <button data-action="interact" class="small" aria-label="Etkileşim">
+            EL</button
+          ><button data-action="heal" class="small" aria-label="İyileş">
+            CAN</button
+          ><button data-action="parry" class="small" aria-label="Savuştur">
+            KORU</button
+          ><button
+            data-action="ability"
+            class="small"
+            aria-label="Rezonans patlaması"
+          >
+            ✦</button
+          ><button data-action="dash" aria-label="Dash">DASH</button
+          ><button data-action="attack" aria-label="Saldır">VUR</button
+          ><button data-action="jump" aria-label="Zıpla">ZIPLA</button>
+        </div>
+      </div>
+      <div id="landscape-hint">
+        Daha geniş bir görüş için telefonu yatay çevir.
+      </div>
+      <div id="announcer" class="sr-only" aria-live="polite"></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

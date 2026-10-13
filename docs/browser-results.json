@@ -1,0 +1,65 @@
+{
+  "results": [
+    {
+      "name": "Title menu and all assets initialize",
+      "pass": true
+    },
+    {
+      "name": "New game + Web Audio user gesture",
+      "pass": true
+    },
+    {
+      "name": "Real keyboard movement, jumping, landing",
+      "pass": true
+    },
+    {
+      "name": "Save shrine, refresh and Continue persist checkpoint",
+      "pass": true
+    },
+    {
+      "name": "NPC conversation, typewriter and skip",
+      "pass": true
+    },
+    {
+      "name": "Map opens, markers and inventory menus close",
+      "pass": true
+    },
+    {
+      "name": "Enemy damaged and defeated by real combo input",
+      "pass": true
+    },
+    {
+      "name": "Enemy attack damages player and hazard respawns safely",
+      "pass": true
+    },
+    {
+      "name": "Perfect parry with real K input",
+      "pass": true
+    },
+    {
+      "name": "Musical puzzle opens an actual gated passage",
+      "pass": true
+    },
+    {
+      "name": "Bellkeeper full combat simulation beats all phases without invulnerability or health injection",
+      "pass": true
+    },
+    {
+      "name": "Unlocked dash traverses light barrier; dash remains saved",
+      "pass": true
+    },
+    {
+      "name": "Real running game screenshot and resizing",
+      "pass": true
+    },
+    {
+      "name": "Mobile landscape menu and actual pointer controls",
+      "pass": true
+    },
+    {
+      "name": "No critical browser console errors",
+      "pass": true
+    }
+  ],
+  "errors": []
+}
