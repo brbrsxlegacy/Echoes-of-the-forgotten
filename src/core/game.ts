@@ -1,4 +1,13 @@
 import {
+  regions,
+  regionOf,
+  isBoss,
+  gateOpen,
+  questItems,
+  relics,
+} from "../world/regions";
+import { awardBoss, returnFragments } from "../systems/progression";
+import {
   clamp,
   overlaps,
   type Enemy,
@@ -54,6 +63,7 @@ export class Game {
   toast = "";
   toastTimer = 0;
   nearest: string | null = null;
+  oxygen = 14;
   fps = 60;
   last = 0;
   accumulator = 0;
@@ -130,7 +140,7 @@ export class Game {
     this.input.clear();
     this.ui.hide();
     void this.audio.start();
-    this.audio.set("grove");
+    this.audio.set(regions[regionOf(this.room)].music);
     if (!resume) this.save(false);
     if (!resume)
       this.notify(
@@ -152,7 +162,11 @@ export class Game {
     this.player.invuln = 0.8;
     this.player.airDash = true;
     this.enemies = this.room.enemies
-      .filter((e) => e.kind !== "boss" || !this.data.bossDefeated)
+      .filter(
+        (e) =>
+          !isBoss(e.kind) ||
+          !this.data.bosses.includes(e.kind === "boss" ? "bellkeeper" : e.kind),
+      )
       .map((e) => makeEnemy(e.kind, e.x, e.y, e.id));
     this.platforms = this.room.platforms.map((p) => ({ ...p, originY: p.y }));
     this.shots = [];
@@ -165,8 +179,9 @@ export class Game {
     this.transition = 0.6;
     this.roomTitle = 3.4;
     this.nearest = null;
+    this.oxygen = 14;
     this.bellProgress = [];
-    this.audio.set(id === "bell" && !this.data.bossDefeated ? "boss" : "grove");
+    this.audio.set(regions[regionOf(this.room)].music);
   }
   update(dt: number, inputs: boolean) {
     this.time += dt;
@@ -204,7 +219,34 @@ export class Game {
       collision.push({ x: 1870, y: 350, w: 50, h: 380 });
     if (this.room.id === "afterglow" && !p.dash)
       collision.push({ x: 600, y: 370, w: 42, h: 430 });
-    const movement = movePlayer(p, controls, collision, dt, this.data.dash);
+    for (const prop of this.room.props)
+      if (
+        prop.kind === "gate" &&
+        regionOf(this.room) !== "grove" &&
+        !gateOpen(this.data, prop.id as Room["exits"][number]["gate"])
+      )
+        collision.push({ x: prop.x - 22, y: 0, w: 44, h: 730 });
+    const submerged = this.waterLevel() < p.y + 20;
+    if (submerged && !this.data.tide) {
+      this.oxygen = Math.max(0, this.oxygen - dt);
+      if (!this.oxygen) this.hazard();
+    } else this.oxygen = Math.min(14, this.oxygen + dt * 5);
+    const safe = [p.safeX, p.safeY];
+    const movement = movePlayer(
+      p,
+      controls,
+      collision,
+      dt,
+      this.data.dash,
+      submerged && this.data.tide,
+    );
+    if (
+      this.room.hazards.some(
+        (h) => overlaps(p, h) && !(h.type === "heat" && this.data.ember),
+      )
+    ) {
+      [p.safeX, p.safeY] = safe;
+    }
     if (movement.jump) {
       this.audio.effect("jump");
       this.burst(p.x + 17, p.y + 68, 6, "#94cec4");
@@ -244,12 +286,15 @@ export class Game {
           p,
           this.enemies,
           attackBox(p, controls.down("down"), controls.down("up")),
-          p.combo === 3 ? 3 : p.combo === 2 ? 2 : 1,
+          (p.combo === 3 ? 3 : p.combo === 2 ? 2 : 1) +
+            (this.data.equipped === "keen" ? 1 : 0),
           controls.down("down") && !p.grounded,
         ),
       );
-    if (controls.tap("ability") && p.energy >= 35) {
-      p.energy -= 35;
+    const burstCost = this.data.equipped === "focus" ? 30 : 35;
+    const healCost = this.data.equipped === "focus" ? 30 : 40;
+    if (controls.tap("ability") && p.energy >= burstCost) {
+      p.energy -= burstCost;
       p.hitIds.clear();
       this.burst(p.x + 17, p.y + 35, 35, "#efcf82");
       this.audio.effect("parry");
@@ -265,11 +310,12 @@ export class Game {
     }
     if (
       controls.tap("heal") &&
-      p.energy >= 40 &&
+      !p.heal &&
+      p.energy >= healCost &&
       p.hp < p.maxHp &&
       p.grounded
     ) {
-      p.energy -= 40;
+      p.energy -= healCost;
       p.heal = 0.8;
     }
     if (p.heal > 0 && p.heal <= dt * 1.5) {
@@ -278,12 +324,27 @@ export class Game {
       this.burst(p.x + 17, p.y + 35, 18, "#f3d78f");
     }
     this.events(
-      updateEnemies(this.enemies, p, dt, this.shots, this.settings.assist),
+      updateEnemies(
+        this.enemies,
+        p,
+        dt,
+        this.shots,
+        this.settings.assist,
+        this.data.equipped === "aegis" ? 0.75 : 1,
+      ),
     );
-    const boss = this.enemies.find((e) => e.kind === "boss" && e.hp > 0);
-    if (boss) this.audio.set("boss", boss.phase);
+    const boss = this.enemies.find((e) => isBoss(e.kind) && e.hp > 0);
+    if (boss)
+      this.audio.set(
+        boss.kind === "cantor"
+          ? "cantor"
+          : boss.kind === "ashknight"
+            ? "ashboss"
+            : "boss",
+        boss.phase,
+      );
     for (const h of this.room.hazards)
-      if (overlaps(p, h)) {
+      if (overlaps(p, h) && !(h.type === "heat" && this.data.ember)) {
         this.hazard();
         break;
       }
@@ -301,10 +362,10 @@ export class Game {
     this.nearest = null;
     for (const prop of this.room.props) {
       if (
-        ["flowers", "arch", "gate"].includes(prop.kind) ||
+        ["flowers", "arch", "gate", "vent"].includes(prop.kind) ||
         (prop.id &&
           this.data.collected.includes(prop.id) &&
-          prop.kind === "upgrade")
+          ["upgrade", "fragment", "relic"].includes(prop.kind))
       )
         continue;
       if (Math.hypot(p.x + 17 - prop.x, p.y + 68 - prop.y) < 135) {
@@ -315,16 +376,21 @@ export class Game {
               ? "Kaydet / dinlen"
               : prop.kind === "npc"
                 ? "Konuş"
-                : prop.kind === "upgrade"
+                : ["upgrade", "fragment", "relic"].includes(prop.kind)
                   ? "Al"
-                  : "Hatırayı oku";
+                  : prop.kind === "valve"
+                    ? "Vanayı çevir"
+                    : prop.kind === "switch"
+                      ? "Halkayı döndür"
+                      : "Hatırayı oku";
         if (controls.tap("interact")) this.interact(prop);
         break;
       }
     }
     if (inputs && controls.tap("interact") && !this.nearest) {
       const exit = this.room.exits.find((e) => e.side === "down");
-      if (exit && this.room.id === "bridge" && p.x < 230) this.enterExit(exit);
+      if (exit && p.x < 230 && gateOpen(this.data, exit.gate))
+        this.enterExit(exit);
     }
     for (const exit of this.room.exits) {
       const boundary =
@@ -332,15 +398,20 @@ export class Game {
         (exit.side === "left" && p.x < 10) ||
         (exit.side === "up" && p.y < 220 && p.x > 1730);
       if (boundary) {
-        if (
-          exit.gate &&
-          !(exit.gate === "dash" ? this.data.dash : this.data.puzzleSolved)
-        ) {
+        if (!gateOpen(this.data, exit.gate)) {
           p.x = exit.side === "right" ? this.room.width - 80 : 65;
           this.notify(
             exit.gate === "dash"
               ? "Çan Muhafızı bu geçidi koruyor."
-              : "Üç çanın ezgisini tamamla.",
+              : exit.gate === "tide"
+                ? "Batık Kantor’un nefesi bu mührü açar."
+                : exit.gate === "ember"
+                  ? "Kül Şövalyesi’nin kor mührü gerekiyor."
+                  : exit.gate === "sluice"
+                    ? "Vanayı III konumuna getir."
+                    : exit.gate === "forge"
+                      ? "Halkaları taşın gösterdiği sıraya getir."
+                      : "Üç çanın ezgisini tamamla.",
           );
         } else {
           this.enterExit(exit);
@@ -358,6 +429,11 @@ export class Game {
     this.camera.x += (targetX - this.camera.x) * Math.min(1, dt * 5);
     this.camera.y += (targetY - this.camera.y) * Math.min(1, dt * 4);
     return true;
+  }
+  waterLevel() {
+    const water = this.room.water;
+    if (!water) return Infinity;
+    return water.levels?.[this.data.switches[water.control!] ?? 0] ?? water.y;
   }
   enterExit(exit: Room["exits"][number]) {
     this.loadRoom(exit.to, ...exit.spawn);
@@ -381,20 +457,38 @@ export class Game {
         this.data.currency += 12;
         this.burst(e.x, e.y, 20, "#7ab9b4");
       } else if (e.type === "boss-defeat") {
-        this.data.bossDefeated = true;
-        this.data.dash = true;
-        this.data.currency += 100;
+        const kind = (e.kind || "boss") as Enemy["kind"];
+        if (!awardBoss(this.data, kind)) continue;
+        this.shots = [];
         this.player.hp = this.player.maxHp;
         this.player.energy = this.player.maxEnergy;
         this.audio.set("victory");
         this.burst(e.x, e.y, 55, "#efce86");
+        const lines =
+          kind === "cantor"
+            ? [
+                "Suyun altında saklanan ezgi yeniden yükseldi. Kantor, boğulanların isimlerini bırakmadı.",
+                "GELGİT NEFESİ AÇILDI — Su altında sınırsız nefes. ZIPLA / W basılı tut: yukarı yüz; S / ↓: aşağı yüz.",
+                "Doğudaki derin mührü aç. Eski su yollarında daha yükseğe yüzebilirsin. Mira’nın üç ezgi parçasını bul.",
+              ]
+            : kind === "ashknight"
+              ? [
+                  "Şövalye ateşi düşmanlarından değil, hatıralarından saklıyordu.",
+                  "KOR MUHAFIZI AÇILDI — Zemindeki kor alanları artık zarar vermez. Kor mühürleri açıldı.",
+                  "Fırın Kilidi’ndeki alt kasaya geri dön. Wren’in son kor parçası orada. Üçüncü rezonans seni doğudaki taça çağırıyor.",
+                ]
+              : [
+                  "Çan susmadı. Yalnızca yeniden dinlemeyi öğrendi.",
+                  "REZONANS DASH AÇILDI — Shift / dokunmatik DASH. Havada bir kez kullanılabilir.",
+                  "Hatıranın Eşiği’ndeki ışık perdesinden dash ile geç. Doğuda Batık Katedral seni bekliyor.",
+                ];
         this.dialogue(
-          "İlk Rezonans",
-          [
-            "Çan susmadı. Yalnızca yeniden dinlemeyi öğrendi.",
-            "REZONANS DASH AÇILDI — Shift / dokunmatik DASH. Havada bir kez kullanılabilir.",
-            "Hatıranın Eşiği’ndeki ışık perdesinden dash ile geç. Önceden ulaşamadığın yerlere geri dön.",
-          ],
+          kind === "cantor"
+            ? "İkinci Rezonans"
+            : kind === "ashknight"
+              ? "Üçüncü Rezonans"
+              : "İlk Rezonans",
+          lines,
           "boss",
         );
         this.save(false);
@@ -410,6 +504,7 @@ export class Game {
     p.vx = 0;
     p.vy = 0;
     p.invuln = 1.3;
+    this.oxygen = 14;
     this.shake = 5;
     this.audio.effect("hurt");
   }
@@ -460,14 +555,43 @@ export class Game {
             ? `${this.bellProgress.map((n) => ["I", "II", "III"][n]).join(" → ")} …`
             : "Uyumsuz nota. Taştaki ipucunu ara.",
         );
-    } else if (prop.kind === "upgrade") {
+    } else if (prop.kind === "valve" || prop.kind === "switch") {
+      const id = prop.id!;
+      this.data.switches[id] = ((this.data.switches[id] ?? 0) + 1) % 3;
+      this.audio.bell(this.data.switches[id]);
+      const open = gateOpen(
+        this.data,
+        prop.kind === "valve" ? "sluice" : "forge",
+      );
+      this.notify(
+        open
+          ? "Mekanizma ezgiyi buldu. Doğu kapısı açıldı."
+          : `${prop.kind === "valve" ? "Su vanası" : "Fırın halkası"}: ${["I", "II", "III"][this.data.switches[id]]}`,
+      );
+      this.save(false);
+    } else if (prop.kind === "fragment" || prop.kind === "relic") {
+      if (this.data.collected.includes(prop.id!)) return;
       this.data.collected.push(prop.id!);
-      if (prop.id === "hollow-energy") {
-        this.data.maxEnergy += 25;
+      if (prop.kind === "relic" && !this.data.relics.includes(prop.id!))
+        this.data.relics.push(prop.id!);
+      this.data.currency += 10;
+      this.audio.effect("collect");
+      this.burst(prop.x, prop.y - 35, 24, "#dce9c9");
+      this.save(false);
+      this.notify(
+        prop.kind === "relic"
+          ? `${relics[prop.id as keyof typeof relics].name} alındı. Eşyalardan kuşan.`
+          : `${prop.text} alındı. Sahibine dön.`,
+      );
+    } else if (prop.kind === "upgrade") {
+      if (this.data.collected.includes(prop.id!)) return;
+      this.data.collected.push(prop.id!);
+      if (prop.id?.endsWith("energy")) {
+        this.data.maxEnergy = Math.min(250, this.data.maxEnergy + 25);
         this.player.maxEnergy = this.data.maxEnergy;
         this.player.energy = this.data.maxEnergy;
       } else {
-        this.data.maxHealth += 1;
+        this.data.maxHealth = Math.min(20, this.data.maxHealth + 1);
         this.player.maxHp = this.data.maxHealth;
         this.player.hp = this.data.maxHealth;
       }
@@ -491,12 +615,44 @@ export class Game {
           ],
           "npc",
         );
-      else {
+      else if (prop.id === "mira" || prop.id === "wren") {
+        const result = returnFragments(this.data, prop.id);
+        if (result.complete) {
+          this.player.maxHp = this.data.maxHealth;
+          this.player.hp = this.player.maxHp;
+          this.save(false);
+          this.audio.effect("collect");
+        }
+        const mira = prop.id === "mira";
+        const lines = result.complete
+          ? [
+              mira
+                ? "Üç parça. Üç kayıp isim. Ezgiyi tamamladın, Nilo. İçindeki ışık büyüsün. (+1 yaşam, 75 öz)"
+                : "Küller hâlâ ılık. Onları hatırladığın için zırh seni hatırlayacak. (Hatıra Zırhı, 75 öz)",
+            ]
+          : result.returned
+            ? [
+                mira
+                  ? "Katedral yeniden nefes alıyor. Kusursuz değil; ama artık yalnız da değil."
+                  : "Ateşin içinden bir isim kurtardın. Bir dünya böyle başlar.",
+              ]
+            : [
+                mira
+                  ? "Suyun yuttuğu ezgim üç parçaya ayrıldı. Galeri, arşiv ve organ geçidinde ara."
+                  : "Ocağım üç kor parçasını kaybetti. Tüneller ve dökümhanede iki tanesi; üçüncüsü kor mühürlü kasada.",
+                `Bulunan parçalar: ${result.count} / 3. Üçünü bulup bana dön.`,
+              ];
+        this.dialogue(
+          mira ? "Mira • Son Korist" : "Wren • Kül Demircisi",
+          lines,
+          "npc",
+        );
+      } else {
         const lines = [
           "Çizdiğim her yol, ertesi gün biraz değişiyor. Ama çan avlusu yerinde kaldı.",
           "Muhafızın ağır darbesinden önce çanı yükselir. Zıpla; dalga zemini tarar. Toparlanırken yaklaş.",
         ];
-        if (this.data.currency >= 40 && this.data.maxHealth < 10) {
+        if (this.data.currency >= 40 && this.data.maxHealth < 14) {
           lines.push("40 hatıra özü karşılığında fenerini güçlendirebilirim.");
           this.ui.choicePending = true;
         }
@@ -505,7 +661,7 @@ export class Game {
     }
   }
   buyUpgrade() {
-    if (this.data.currency >= 40 && this.data.maxHealth < 10) {
+    if (this.data.currency >= 40 && this.data.maxHealth < 14) {
       this.data.currency -= 40;
       this.data.maxHealth++;
       this.player.maxHp = this.data.maxHealth;

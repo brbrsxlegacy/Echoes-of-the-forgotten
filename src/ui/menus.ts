@@ -1,3 +1,12 @@
+import {
+  regions,
+  regionOf,
+  isBoss,
+  gateOpen,
+  relics,
+  questItems,
+  type RegionId,
+} from "../world/regions";
 import type { Game } from "../core/game";
 import { rooms } from "../world/rooms";
 export class UI {
@@ -62,7 +71,7 @@ export class UI {
     const saved = [0, 1, 2].map((i) => this.g.store.load(i));
     const has = saved.some(Boolean);
     this.shell(
-      `<span class="brand">BRBRS <b>GAMES</b> <i>presents</i></span><div class="title-lockup"><span class="eyebrow">A LOST MELODY. A WORLD WORTH REMEMBERING.</span><h1>ECHOES<span>OF THE</span>FORGOTTEN</h1><div class="ornament">─── ◇ ───</div><p class="subtitle">Unutulanların Yankısı</p></div><div class="menu-list"><button id="continue" ${has ? "" : "disabled"}>Devam Et <small>Continue</small></button><button id="new">Yeni Yolculuk <small>New Game</small></button><button id="load">Kayıtlar <small>Load Game</small></button><button id="settings">Ayarlar <small>Settings</small></button><button id="controls">Kontroller <small>Controls</small></button><button id="credits">Emeği Geçenler <small>Credits</small></button></div><div class="title-footer"><span>WHISPERING GROVE · İLK REZONANS</span><span>0.2.1 • OYNANABİLİR İLK BÖLÜM</span></div>`,
+      `<span class="brand">BRBRS <b>GAMES</b> <i>presents</i></span><div class="title-lockup"><span class="eyebrow">A LOST MELODY. A WORLD WORTH REMEMBERING.</span><h1>ECHOES<span>OF THE</span>FORGOTTEN</h1><div class="ornament">─── ◇ ───</div><p class="subtitle">Unutulanların Yankısı</p></div><div class="menu-list"><button id="continue" ${has ? "" : "disabled"}>Devam Et <small>Continue</small></button><button id="new">Yeni Yolculuk <small>New Game</small></button><button id="load">Kayıtlar <small>Load Game</small></button><button id="settings">Ayarlar <small>Settings</small></button><button id="controls">Kontroller <small>Controls</small></button><button id="credits">Emeği Geçenler <small>Credits</small></button></div><div class="title-footer"><span>VEY L O R A · ÜÇ KAYIP EZGİ</span><span>0.3 • KORU / KATEDRAL / KÜL</span></div>`,
       "title-view",
     );
     this.bind("continue", () => {
@@ -86,7 +95,7 @@ export class UI {
       ]
         .map((i) => {
           const s = this.g.store.load(i);
-          return `<button id="slot-${i}" ${load && !s ? "disabled" : ""}><strong>Fener ${i + 1}</strong><span>${s ? `${rooms[s.checkpoint.room].name} · ${s.dash ? "Dash açık" : "İlk ezgi aranıyor"}` : "Henüz bir hatıra yok"}</span><small>${s ? `${s.discovered.length}/9 oda · ${Math.floor(s.playTime / 60)} dk · ${new Date(s.timestamp).toLocaleDateString("tr-TR")}` : "Yeni yolculuk"}</small></button>`;
+          return `<button id="slot-${i}" ${load && !s ? "disabled" : ""}><strong>Fener ${i + 1}</strong><span>${s ? `${rooms[s.checkpoint.room].name} · ${s.dash ? "Dash açık" : "İlk ezgi aranıyor"}` : "Henüz bir hatıra yok"}</span><small>${s ? `${s.discovered.length}/${Object.keys(rooms).length} oda · ${Math.floor(s.playTime / 60)} dk · ${new Date(s.timestamp).toLocaleDateString("tr-TR")}` : "Yeni yolculuk"}</small></button>`;
         })
         .join("")}</div><button class="secondary" id="back">Geri</button>`,
     );
@@ -144,7 +153,7 @@ export class UI {
   back() {
     this.g.mode === "title" ? this.title() : this.pause();
   }
-  map() {
+  map(region: RegionId = regionOf(this.g.room)) {
     this.screen = "map";
     const g = this.g;
     try {
@@ -153,14 +162,16 @@ export class UI {
       );
     } catch {}
     const discovered = g.data.discovered;
-    const nodes = Object.values(rooms).filter((r) => discovered.includes(r.id));
+    const nodes = Object.values(rooms).filter(
+      (r) => discovered.includes(r.id) && regionOf(r) === region,
+    );
     const x = (col: number) => 62 + col * 110,
       y = (row: number) => 35 + row * 100;
     const paths: string[] = [];
     for (const r of nodes)
       for (const exit of r.exits) {
         const to = rooms[exit.to];
-        if (discovered.includes(to.id)) {
+        if (discovered.includes(to.id) && regionOf(to) === region) {
           paths.push(
             `<line x1="${x(r.map[0]) + 43}" y1="${y(r.map[1]) + 28}" x2="${x(to.map[0]) + 43}" y2="${y(to.map[1]) + 28}" stroke="#617c79" stroke-width="2"/>`,
           );
@@ -172,13 +183,24 @@ export class UI {
     const cells = nodes
       .map(
         (r) =>
-          `<g class="map-room" data-room="${r.id}" tabindex="0" role="button" aria-label="${r.name}"><rect x="${x(r.map[0])}" y="${y(r.map[1])}" width="86" height="56" rx="4" fill="${r.id === g.room.id ? "#365953" : "#16313c"}" stroke="${r.id === g.room.id ? "#e6c780" : "#597975"}"/><text x="${x(r.map[0]) + 43}" y="${y(r.map[1]) + 21}" text-anchor="middle" fill="#d5d5bf" font-size="9">${r.name}</text><text x="${x(r.map[0]) + 43}" y="${y(r.map[1]) + 42}" text-anchor="middle" fill="#dabd7b" font-size="15">${r.id === g.room.id ? "◆" : r.props.some((p) => p.kind === "shrine") ? "✧" : r.id === "bell" ? "♜" : "·"}${this.markers.has(r.id) ? " ⚑" : ""}</text></g>`,
+          `<g class="map-room" data-room="${r.id}" tabindex="0" role="button" aria-label="${r.name}"><rect x="${x(r.map[0])}" y="${y(r.map[1])}" width="86" height="56" rx="4" fill="${r.id === g.room.id ? "#365953" : "#16313c"}" stroke="${r.id === g.room.id ? "#e6c780" : "#597975"}"/><text x="${x(r.map[0]) + 43}" y="${y(r.map[1]) + 21}" text-anchor="middle" fill="#d5d5bf" font-size="9">${r.name}</text><text x="${x(r.map[0]) + 43}" y="${y(r.map[1]) + 42}" text-anchor="middle" fill="#dabd7b" font-size="15">${r.id === g.room.id ? "◆" : r.props.some((p) => p.kind === "shrine") ? "✧" : r.enemies.some((e) => isBoss(e.kind)) ? "♜" : "·"}${this.markers.has(r.id) ? " ⚑" : ""}${r.exits.some((e) => e.gate && !gateOpen(g.data, e.gate)) ? " ◇" : ""}</text></g>`,
       )
       .join("");
     this.shell(
-      `<span class="eyebrow">ORIN'İN PARŞÖMENİ</span><h2>Fısıldayan Koru</h2><svg class="world-map" viewBox="0 0 870 360" aria-label="Keşfedilen gerçek odaların haritası">${paths.join("")}${cells}</svg><p class="map-legend">◆ Nilo &nbsp; ✧ Fener &nbsp; ♜ Muhafız &nbsp; ? Keşfedilmemiş yol</p><p>Odaya dokun: işaret koy. Etkin bir fener seç: hızlı yolculuk.</p><div id="map-selected"></div><button class="secondary" id="back">Geri</button><button id="resume">Oyuna dön</button>`,
+      `<span class="eyebrow">ORIN'İN PARŞÖMENİ</span><h2>${regions[region].name}</h2><div class="region-tabs">${Object.entries(
+        regions,
+      )
+        .map(
+          ([id, r]) =>
+            `<button id="region-${id}" class="${id === region ? "active" : "secondary"}">${r.name}</button>`,
+        )
+        .join(
+          "",
+        )}</div><svg class="world-map" viewBox="0 0 870 360" aria-label="Keşfedilen gerçek odaların haritası">${paths.join("")}${cells}</svg><p class="map-legend">◆ Nilo &nbsp; ✧ Fener &nbsp; ♜ Boss &nbsp; ◇ Yetenek / mekanizma kilidi &nbsp; ? Keşfedilmemiş yol</p><p>Odaya dokun: işaret koy. Etkin bir fener seç: hızlı yolculuk.</p><div id="map-selected"></div><button class="secondary" id="back">Geri</button><button id="resume">Oyuna dön</button>`,
       "panel wide",
     );
+    for (const id of Object.keys(regions) as RegionId[])
+      this.bind(`region-${id}`, () => this.map(id));
     for (const el of this.overlay.querySelectorAll<HTMLElement>(
       "[data-room]",
     )) {
@@ -197,7 +219,12 @@ export class UI {
             p.kind === "shrine" && g.data.collected.includes(`shrine:${p.id}`),
         );
         this.overlay.querySelector("#map-selected")!.innerHTML =
-          `<p>${r.name} ${this.markers.has(id) ? "• işaretlendi" : ""}</p>${shrine ? '<button id="travel">Bu fenere git</button>' : ""}`;
+          `<p>${r.name} ${this.markers.has(id) ? "• işaretlendi" : ""}</p><p>${r.exits
+            .filter((e) => regionOf(rooms[e.to]) !== region)
+            .map((e) => `Bağlantı: ${regions[regionOf(rooms[e.to])].name}`)
+            .join(
+              " · ",
+            )}</p>${shrine ? '<button id="travel">Bu fenere git</button>' : ""}`;
         if (shrine)
           this.bind("travel", () => {
             g.loadRoom(id, shrine.x, shrine.y - 68);
@@ -221,7 +248,7 @@ export class UI {
     const d = this.g.data;
     const collected = d.collected.filter((id) => !id.startsWith("shrine:"));
     this.shell(
-      `<span class="eyebrow">NILO'NUN HATIRALARI</span><h2>Yankı İğnesi</h2><p>Eski bir ezginin son parçası. Üç vuruşluk saldırı; havada aşağı vuruş düşmandan sektirir.</p><div class="stats"><span><strong>${d.maxHealth}</strong> Yaşam</span><span><strong>${d.maxEnergy}</strong> Rezonans</span><span><strong>${d.currency}</strong> Hatıra özü</span></div><h3>${d.dash ? "✧ Rezonans Dash" : "◇ Kayıp rezonans"}</h3><p>${d.dash ? "Shift ile ışık perdesinden geç. Havada bir kez; yere inince yenilenir." : "Çan Muhafızı ilk rezonansı koruyor."}</p><h3>Hatıra defteri · ${collected.length}</h3><div class="journal">${
+      `<span class="eyebrow">NILO'NUN HATIRALARI</span><h2>Yankı İğnesi</h2><p>Eski bir ezginin son parçası. Üç vuruşluk saldırı; havada aşağı vuruş düşmandan sektirir.</p><div class="stats"><span><strong>${d.maxHealth}</strong> Yaşam</span><span><strong>${d.maxEnergy}</strong> Rezonans</span><span><strong>${d.currency}</strong> Hatıra özü</span></div><h3>${d.dash ? "✧ Rezonans Dash" : "◇ Kayıp rezonans"}</h3><p>${d.dash ? "Shift ile ışık perdesinden geç. Havada bir kez; yere inince yenilenir." : "Çan Muhafızı ilk rezonansı koruyor."}</p><h3>Üç kayıp ezgi · ${d.bosses.length} / 3</h3><p>${d.tide ? "✧ Gelgit Nefesi: su altında sınırsız nefes. ZIPLA / W yukarı; ↓ / S aşağı yüz." : "◇ Gelgit Nefesi: Batık Kantor’da."}<br>${d.ember ? "✧ Kor Muhafızı: kor zeminleri ve mühürler geçilebilir." : "◇ Kor Muhafızı: Kül Şövalyesi’nde."}</p><h3>Kuşanılan hatıra</h3><div class="relic-list">${d.relics.map((id) => `<button id="equip-${id}" class="${d.equipped === id ? "active" : "secondary"}">${d.equipped === id ? "✧ " : ""}${relics[id as keyof typeof relics].name}<small>${relics[id as keyof typeof relics].text}</small></button>`).join("") || "<p>Gizli odalarda hatıralar ara.</p>"}</div><p>Tek hatıra kuşanılır. Seçili hatıraya tekrar dokunarak çıkar.</p><h3>Bekleyen ezgiler</h3><p>Mira: ${questItems.mira.filter((id) => d.collected.includes(id)).length} / 3 ${d.quests.includes("mira") ? "• tamamlandı" : ""}<br>Wren: ${questItems.wren.filter((id) => d.collected.includes(id)).length} / 3 ${d.quests.includes("wren") ? "• tamamlandı" : ""}</p><h3>Hatıra defteri · ${collected.length}</h3><div class="journal">${
         collected
           .map((id) => {
             const prop = Object.values(rooms)
@@ -232,6 +259,12 @@ export class UI {
           .join("") || "<p>Veylora henüz seni hatırlamıyor.</p>"
       }</div><button class="secondary" id="back">Geri</button>`,
     );
+    for (const id of d.relics)
+      this.bind(`equip-${id}`, () => {
+        d.equipped = d.equipped === id ? null : id;
+        this.g.save(false);
+        this.inventory();
+      });
     this.bind("back", () => this.pause());
   }
   settings() {
@@ -330,7 +363,7 @@ export class UI {
   credits() {
     this.screen = "credits";
     this.shell(
-      `<span class="eyebrow">BRBRS GAMES</span><h2>Echoes of the Forgotten</h2><p>Veylora, Nilo ve tüm hatıraları bu oyun için yaratıldı.</p><p><b>Yaratıcı yön:</b> Barbaros / BRBRS Games<br><b>Geliştirme:</b> Codex<br><b>Çizimler:</b> Bu projeye özel üretilmiş ve oyun atlaslarına dönüştürülmüş özgün görseller<br><b>Müzik:</b> Özgün notalar, Web Audio enstrümanları ve dinamik düzenleme</p><p>Sürüm 0.2: Whispering Grove’un dokuz odası ve Çan Muhafızı. Diğer altı bölge ve on bir boss henüz geliştirilmedi.</p><p>Tarayıcı oyunu ve kurulabilir PWA. Native mobil uygulama değildir.</p><button class="secondary" id="back">Geri</button>`,
+      `<span class="eyebrow">BRBRS GAMES</span><h2>Echoes of the Forgotten</h2><p>Veylora, Nilo ve tüm hatıraları bu oyun için yaratıldı.</p><p><b>Yaratıcı yön:</b> Barbaros / BRBRS Games<br><b>Geliştirme:</b> Codex<br><b>Çizimler:</b> Bu projeye özel üretilmiş ve oyun atlaslarına dönüştürülmüş özgün görseller<br><b>Müzik:</b> Özgün notalar, Web Audio enstrümanları ve dinamik düzenleme</p><p>Sürüm 0.3: Fısıldayan Koru, Batık Katedral ve Kül Çukuru. 25 oda; Çan Muhafızı, Batık Kantor ve Kül Şövalyesi. Kalan dört bölge ve dokuz boss henüz geliştirilmedi.</p><p>Tarayıcı oyunu ve kurulabilir PWA. Native mobil uygulama değildir.</p><button class="secondary" id="back">Geri</button>`,
     );
     this.bind("back", () => this.title());
   }
@@ -338,7 +371,7 @@ export class UI {
     this.screen = "dialogue";
     const g = this.g;
     this.shell(
-      `<div class="dialogue-head"><img src="/icons/icon-192.png" alt="Nilo"><div><span class="eyebrow">UNUTULMAYAN BİR SES</span><h3>${g.dialogueName}</h3></div></div><p id="dialogue-text"></p><div class="dialogue-actions"><button id="next">Devam · E / ZIPLA</button><button id="skip" class="secondary">Geç</button></div><div id="choice"></div>`,
+      `<div class="dialogue-head"><img src="/assets/ui/${g.dialogueName.startsWith("Mira") ? "mira" : g.dialogueName.startsWith("Wren") ? "wren" : g.dialoguePortrait === "boss" ? (g.room.id === "cantor" ? "cantor" : g.room.id === "ashknight" ? "ashknight" : "bellkeeper") : g.dialoguePortrait === "npc" ? "lanternkeeper" : "nilo"}-portrait.webp" alt="${g.dialogueName}"><div><span class="eyebrow">UNUTULMAYAN BİR SES</span><h3>${g.dialogueName}</h3></div></div><p id="dialogue-text"></p><div class="dialogue-actions"><button id="next">Devam · E / ZIPLA</button><button id="skip" class="secondary">Geç</button></div><div id="choice"></div>`,
       "dialogue-panel",
     );
     this.overlay.className = "dialogue-overlay";

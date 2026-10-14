@@ -782,3 +782,29 @@ body {
     pointer-events: none;
   }
 }
+
+.region-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+.region-tabs button {
+  flex: 1;
+  padding: 12px;
+  font-size: 14px;
+}
+.active {
+  border-color: #e6c780 !important;
+  background: rgba(168, 137, 74, 0.2) !important;
+}
+.relic-list {
+  display: grid;
+  gap: 8px;
+}
+.relic-list button small {
+  display: block;
+  margin-top: 6px;
+  color: #a9bfb6;
+  font-size: 12px;
+}

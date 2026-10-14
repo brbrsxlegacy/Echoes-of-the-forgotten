@@ -38,6 +38,13 @@ export function newSave(): SaveData {
     currency: 0,
     dash: false,
     bossDefeated: false,
+    bosses: [],
+    tide: false,
+    ember: false,
+    switches: {},
+    quests: [],
+    relics: [],
+    equipped: null,
     puzzleSolved: false,
     discovered: ["lantern"],
     collected: [],
@@ -65,10 +72,10 @@ export function validateSave(value: unknown): SaveData | null {
   if (
     !Number.isFinite(v.maxHealth) ||
     v.maxHealth < 6 ||
-    v.maxHealth > 12 ||
+    v.maxHealth > 20 ||
     !Number.isFinite(v.maxEnergy) ||
     v.maxEnergy < 100 ||
-    v.maxEnergy > 200 ||
+    v.maxEnergy > 250 ||
     !Number.isFinite(v.health) ||
     v.health < 0 ||
     v.health > v.maxHealth ||
@@ -82,7 +89,7 @@ export function validateSave(value: unknown): SaveData | null {
     !v.discovered.every((x) => typeof x === "string" && !!rooms[x]) ||
     !Array.isArray(v.collected) ||
     !v.collected.every((x) => typeof x === "string") ||
-    v.collected.length > 100
+    v.collected.length > 250
   )
     return null;
   if (
@@ -94,7 +101,49 @@ export function validateSave(value: unknown): SaveData | null {
     !Number.isFinite(v.playTime)
   )
     return null;
-  return structuredClone(v);
+  // v2 Grove saves remain valid; expansion fields are additive and normalized.
+  const result = structuredClone(v);
+  for (const key of ["bosses", "quests", "relics"] as const) {
+    const list = result[key] ?? [];
+    if (
+      !Array.isArray(list) ||
+      list.length > 30 ||
+      !list.every((x) => typeof x === "string")
+    )
+      return null;
+    result[key] = [...new Set(list)];
+  }
+  if (
+    result.bosses.some(
+      (x) => !["bellkeeper", "cantor", "ashknight"].includes(x),
+    )
+  )
+    return null;
+  if (result.relics.some((x) => !["keen", "aegis", "focus"].includes(x)))
+    return null;
+  if (result.bossDefeated && !result.bosses.includes("bellkeeper"))
+    result.bosses.push("bellkeeper");
+  for (const key of ["tide", "ember"] as const) {
+    if (result[key] !== undefined && typeof result[key] !== "boolean")
+      return null;
+    result[key] = result[key] ?? false;
+  }
+  const switches = result.switches ?? {};
+  if (
+    typeof switches !== "object" ||
+    switches === null ||
+    Array.isArray(switches) ||
+    Object.keys(switches).some(
+      (k) => !["sluice", "forge-a", "forge-b", "forge-c"].includes(k),
+    ) ||
+    Object.values(switches).some((x) => !Number.isInteger(x) || x < 0 || x > 2)
+  )
+    return null;
+  result.switches = switches;
+  result.equipped = result.equipped ?? null;
+  if (result.equipped !== null && !result.relics.includes(result.equipped))
+    return null;
+  return result;
 }
 export interface StorageLike {
   getItem(k: string): string | null;

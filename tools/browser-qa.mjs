@@ -19,7 +19,9 @@ await new Promise((resolve, reject) => {
 const browser = await pw.launch({
   headless: true,
   executablePath: process.env.CHROME_PATH || (await chromium.executablePath()),
-  args: chromium.args.filter((a) => !a.startsWith("--blink-settings")),
+  args: chromium.args.filter(
+    (a) => !a.startsWith("--blink-settings") && !a.startsWith("--touch-events"),
+  ),
 });
 const errors = [];
 const results = [];
@@ -62,7 +64,7 @@ await check("Title menu and all assets initialize", async () => {
   await page.locator("#new").waitFor();
   assert.equal(
     await page.evaluate(() => Object.keys(window.__game.assets.images).length),
-    4,
+    8,
   );
   await page.screenshot({ path: "test-output/title.png" });
 });
@@ -327,6 +329,7 @@ await check("Real running game screenshot and resizing", async () => {
     g.ui.hide();
     g.loadRoom("bell", 920, 662);
     g.data.bossDefeated = false;
+    g.data.bosses = g.data.bosses.filter((id) => id !== "bellkeeper");
     g.loadRoom("bell", 920, 662);
   });
   await page.waitForTimeout(750);
@@ -343,6 +346,396 @@ await check("Real running game screenshot and resizing", async () => {
   await page.waitForTimeout(100);
   assert.equal(await page.locator("canvas").count(), 1);
 });
+await check(
+  "Dash exit leads into the new cathedral through an actual room boundary",
+  async () => {
+    await page.evaluate(() => {
+      const g = window.__game;
+      g.mode = "playing";
+      g.ui.hide();
+      g.data.dash = true;
+      g.loadRoom("afterglow", 1880, 662);
+    });
+    await page.waitForFunction(() => window.__game.room.id === "tidevestibule");
+    assert.equal((await state()).room, "tidevestibule");
+  },
+);
+await check(
+  "Cathedral sluice changes water and unlocks the real east exit",
+  async () => {
+    await page.evaluate(() => {
+      const g = window.__game;
+      g.mode = "playing";
+      g.ui.hide();
+      g.data.switches.sluice = 0;
+      g.loadRoom("tidesluice", 403, 662);
+      g.enemies = [];
+    });
+    for (let i = 0; i < 2; i++) {
+      await page.keyboard.press("e", { delay: 100 });
+      await page.waitForTimeout(120);
+    }
+    assert.equal((await state()).data.switches.sluice, 2);
+    assert.equal(await page.evaluate(() => window.__game.waterLevel()), 825);
+    await page.evaluate(() => {
+      window.__game.player.x = 1880;
+    });
+    await page.waitForFunction(() => window.__game.room.id === "tideorgan");
+  },
+);
+await check(
+  "Three forge wheels reject a wrong state and open when II I III is set",
+  async () => {
+    await page.evaluate(() => {
+      const g = window.__game;
+      g.mode = "playing";
+      g.ui.hide();
+      g.data.switches = {};
+      g.loadRoom("ashforge", 603, 662);
+    });
+    for (const [x, n] of [
+      [603, 1],
+      [1453, 2],
+    ])
+      for (let i = 0; i < n; i++) {
+        await page.evaluate((x) => {
+          const p = window.__game.player;
+          p.x = x;
+          p.y = 662;
+        }, x);
+        await page.keyboard.press("e", { delay: 100 });
+        await page.waitForTimeout(120);
+      }
+    assert.equal((await state()).data.switches["forge-a"], 1);
+    assert.equal((await state()).data.switches["forge-c"], 2);
+    // An untouched wheel is visibly I and must count as I in the mechanism.
+    await page.evaluate(() => {
+      window.__game.player.x = 1880;
+    });
+    await page.waitForFunction(() => window.__game.room.id === "ashfoundry");
+  },
+);
+for (const kind of ["cantor", "ashknight"])
+  await check(
+    `${kind}: full fight with movement, attacks, parries and normal health`,
+    async () => {
+      const result = await page.evaluate((kind) => {
+        const g = window.__game;
+        g.mode = "playing";
+        g.ui.hide();
+        g.data.bosses = g.data.bosses.filter((x) => x !== kind);
+        g.data.tide = kind === "ashknight";
+        g.data.ember = false;
+        g.data.equipped = null;
+        g.data.maxHealth = 6;
+        g.data.maxEnergy = 100;
+        g.player.maxHp = 6;
+        g.player.maxEnergy = 100;
+        g.loadRoom(kind, 300, 662);
+        g.player.hp = 6;
+        g.player.energy = 100;
+        g.player.invuln = 0;
+        g.settings.assist = false;
+        let minHp = 6,
+          parries = 0,
+          strikes = 0;
+        const phases = new Set();
+        for (
+          let i = 0;
+          i < 30000 && g.mode === "playing" && !g.data.bosses.includes(kind);
+          i++
+        ) {
+          const p = g.player,
+            e = g.enemies[0];
+          phases.add(e.phase);
+          const held = new Set(),
+            taps = new Set();
+          const delta = e.x + e.w / 2 - (p.x + 17),
+            dir = delta >= 0 ? "right" : "left",
+            away = delta >= 0 ? "left" : "right";
+          const gap = Math.abs(delta) - e.w / 2 - 17;
+          if (gap > 70 && e.state !== "attack") held.add(dir);
+          if (gap < 25) held.add(away);
+          const canAttack = gap < 105 && gap > 0;
+          if (
+            e.state === "windup" &&
+            e.timer < 0.14 &&
+            p.parryCooldown <= 0 &&
+            gap < 160 &&
+            (e.pattern === 1 || e.pattern === 0)
+          ) {
+            taps.add("parry");
+            parries++;
+          }
+          const danger = g.shots.some(
+            (s) => !s.friendly && Math.abs(s.x - p.x) < 150,
+          );
+          if ((e.state === "attack" && p.parry <= 0) || danger) {
+            held.add("jump");
+            if (p.grounded) taps.add("jump");
+          }
+          if (
+            kind === "ashknight" &&
+            e.pattern === 2 &&
+            (e.state === "windup" || e.state === "attack") &&
+            Math.abs(p.x + 17 - e.targetX) < 100
+          )
+            held.add(away);
+          if (canAttack && p.attack < 0.07 && e.state !== "attack" && !p.heal) {
+            held.delete(away);
+            held.add(dir);
+            taps.add("attack");
+            strikes++;
+          }
+          if (
+            p.hp < 4 &&
+            p.energy >= 40 &&
+            p.grounded &&
+            !p.heal &&
+            e.state === "recover" &&
+            e.timer > 0.95
+          )
+            taps.add("heal");
+          else if (p.energy >= 35 && canAttack && e.state === "recover")
+            taps.add("ability");
+          if (p.x < 80) {
+            held.delete("left");
+            held.add("right");
+          }
+          if (p.x > 1800) {
+            held.delete("right");
+            held.add("left");
+          }
+          g.input.held = held;
+          g.input.pressed = taps;
+          g.update(1 / 120, true);
+          minHp = Math.min(minHp, p.hp);
+        }
+        return {
+          won: g.data.bosses.includes(kind),
+          minHp,
+          hp: g.player.hp,
+          bossHp: g.enemies[0]?.hp,
+          parries,
+          strikes,
+          phases: [...phases],
+          mode: g.mode,
+        };
+      }, kind);
+      console.log(kind + " simulation " + JSON.stringify(result));
+      assert.equal(result.won, true);
+      assert.ok(result.minHp > 0);
+      assert.deepEqual(result.phases, [1, 2, 3]);
+    },
+  );
+await check(
+  "Tide Breath swims upward, prevents drowning, and remains saved",
+  async () => {
+    await page.evaluate(() => {
+      const g = window.__game;
+      g.mode = "playing";
+      g.ui.hide();
+      g.loadRoom("tideabyss", 480, 650);
+      g.enemies = [];
+      g.input.clear();
+    });
+    assert.equal((await state()).data.tide, true);
+    const y = (await state()).p.y;
+    await page.keyboard.down("Space");
+    await page.waitForFunction((y) => window.__game.player.y < y - 120, y);
+    await page.keyboard.up("Space");
+    await page.evaluate(() => window.__game.save(false));
+    assert.equal(
+      await page.evaluate(() => window.__game.store.load(0).tide),
+      true,
+    );
+  },
+);
+await check(
+  "Heat gate stops Nilo before reward; Ember Guard permits backtracking and heat floor traversal",
+  async () => {
+    await page.evaluate(() => {
+      const g = window.__game;
+      g.mode = "playing";
+      g.ui.hide();
+      g.data.ember = false;
+      g.loadRoom("ashvault", 450, 662);
+      g.enemies = [];
+      g.input.clear();
+    });
+    await page.keyboard.down("d");
+    const t = await page.evaluate(() => window.__game.time);
+    await page.waitForFunction((t) => window.__game.time > t + 1, t);
+    await page.keyboard.up("d");
+    assert.ok((await state()).p.x < 550);
+    await page.evaluate(() => {
+      const g = window.__game;
+      g.data.ember = true;
+      g.player.invuln = 0;
+      g.player.x = 600;
+      g.player.y = 662;
+      g.player.hp = 6;
+      g.player.safeX = 400;
+      g.player.safeY = 662;
+    });
+    await page.keyboard.down("d");
+    const t2 = await page.evaluate(() => window.__game.time);
+    await page.waitForFunction((t) => window.__game.time > t + 0.4, t2);
+    await page.keyboard.up("d");
+    assert.equal((await state()).p.hp, 6);
+    assert.ok((await state()).p.x > 650);
+  },
+);
+await check(
+  "Fragments, Mira reward and equippable relics function and persist",
+  async () => {
+    await page.evaluate(() => {
+      const g = window.__game;
+      g.mode = "playing";
+      g.ui.hide();
+      g.data.collected = g.data.collected.filter(
+        (x) => !x.startsWith("canticle-"),
+      );
+      g.data.quests = [];
+      g.data.relics = [];
+      g.data.collected = g.data.collected.filter((x) => x !== "keen");
+      g.data.equipped = null;
+    });
+    for (const [room, x, y] of [
+      ["tidegallery", 1533, 352],
+      ["tidecrypt", 1073, 372],
+      ["tideorgan", 1043, 402],
+    ]) {
+      await page.evaluate(
+        ([room, x, y]) => {
+          const g = window.__game;
+          g.loadRoom(room, x, y);
+          g.enemies = [];
+        },
+        [room, x, y],
+      );
+      await page.keyboard.press("e", { delay: 100 });
+      await page.waitForTimeout(120);
+    }
+    assert.equal(
+      (await state()).data.collected.filter((x) => x.startsWith("canticle-"))
+        .length,
+      3,
+    );
+    await page.evaluate(() => {
+      const g = window.__game;
+      g.loadRoom("tidechoir", 493, 662);
+      g.enemies = [];
+    });
+    await page.keyboard.press("e", { delay: 100 });
+    await page.waitForFunction(() => window.__game.mode === "dialogue");
+    assert.ok((await state()).data.quests.includes("mira"));
+    assert.equal((await state()).data.maxHealth, 7);
+    await page.locator("#skip").click();
+    await page.evaluate(() => {
+      const g = window.__game;
+      g.loadRoom("tidecrypt", 1673, 372);
+      g.enemies = [];
+    });
+    await page.keyboard.press("e", { delay: 100 });
+    await page.waitForFunction(() =>
+      window.__game.data.relics.includes("keen"),
+    );
+    await page.waitForFunction(() =>
+      window.__game.data.relics.includes("keen"),
+    );
+    assert.ok((await state()).data.relics.includes("keen"));
+    await page.keyboard.press("i", { delay: 100 });
+    await page.locator("#equip-keen").click();
+    assert.equal((await state()).data.equipped, "keen");
+    assert.equal(
+      await page.evaluate(() => window.__game.store.load(0).equipped),
+      "keen",
+    );
+    await page.locator("#back").click();
+    await page.locator("#resume").click();
+  },
+);
+await check(
+  "Regional map tabs reflect discovered rooms and travel across activated shrines",
+  async () => {
+    await page.evaluate(() => {
+      const g = window.__game;
+      g.data.collected.push("shrine:tidevestibule");
+      g.mode = "pause";
+      g.ui.map();
+    });
+    await page.locator("#region-drowned").click();
+    assert.ok(await page.locator('[data-room="tidevestibule"]').count());
+    await page.locator('[data-room="tidevestibule"]').click();
+    await page.locator("#travel").click();
+    assert.equal((await state()).room, "tidevestibule");
+    assert.equal((await state()).mode, "playing");
+  },
+);
+await check(
+  "New regions and all 25 room scenes render with original integrated assets",
+  async () => {
+    await page.evaluate(() => {
+      const g = window.__game;
+      const ids = [
+        "lantern",
+        "roots",
+        "canopy",
+        "bridge",
+        "hollow",
+        "chimes",
+        "vigil",
+        "bell",
+        "afterglow",
+        "tidevestibule",
+        "tidegallery",
+        "tidecrypt",
+        "tidesluice",
+        "tideorgan",
+        "tidechoir",
+        "cantor",
+        "tideabyss",
+        "ashgate",
+        "ashtunnels",
+        "ashforge",
+        "ashvault",
+        "ashfoundry",
+        "ashwatch",
+        "ashknight",
+        "ashcrown",
+      ];
+      for (const id of ids) {
+        g.loadRoom(id, 200, 662);
+        g.renderer.draw();
+      }
+    });
+  },
+);
+await page.setViewportSize({ width: 1280, height: 720 });
+for (const [room, path] of [
+  ["tidevestibule", "cathedral"],
+  ["cantor", "cantor"],
+  ["ashgate", "ashen"],
+  ["ashknight", "ashknight"],
+]) {
+  await page.evaluate((room) => {
+    const g = window.__game;
+    g.mode = "playing";
+    g.ui.hide();
+    g.data.bosses = g.data.bosses.filter((x) => x !== room);
+    g.loadRoom(
+      room,
+      room === "cantor" || room === "ashknight" ? 1000 : 600,
+      662,
+    );
+    g.toastTimer = 0;
+    g.roomTitle = 0;
+  }, room);
+  await page.waitForTimeout(850);
+  await page.screenshot({ path: `test-output/${path}.png` });
+}
+
 const mobile = await browser.newContext({
   viewport: { width: 844, height: 390 },
   isMobile: true,

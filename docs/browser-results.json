@@ -53,6 +53,46 @@
       "pass": true
     },
     {
+      "name": "Dash exit leads into the new cathedral through an actual room boundary",
+      "pass": true
+    },
+    {
+      "name": "Cathedral sluice changes water and unlocks the real east exit",
+      "pass": true
+    },
+    {
+      "name": "Three forge wheels reject a wrong state and open when II I III is set",
+      "pass": true
+    },
+    {
+      "name": "cantor: full fight with movement, attacks, parries and normal health",
+      "pass": true
+    },
+    {
+      "name": "ashknight: full fight with movement, attacks, parries and normal health",
+      "pass": true
+    },
+    {
+      "name": "Tide Breath swims upward, prevents drowning, and remains saved",
+      "pass": true
+    },
+    {
+      "name": "Heat gate stops Nilo before reward; Ember Guard permits backtracking and heat floor traversal",
+      "pass": true
+    },
+    {
+      "name": "Fragments, Mira reward and equippable relics function and persist",
+      "pass": true
+    },
+    {
+      "name": "Regional map tabs reflect discovered rooms and travel across activated shrines",
+      "pass": true
+    },
+    {
+      "name": "New regions and all 25 room scenes render with original integrated assets",
+      "pass": true
+    },
+    {
       "name": "Mobile landscape menu and actual pointer controls",
       "pass": true
     },

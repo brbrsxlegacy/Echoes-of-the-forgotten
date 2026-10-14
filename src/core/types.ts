@@ -4,7 +4,17 @@ export interface Rect {
   w: number;
   h: number;
 }
-export type EnemyKind = "moth" | "husk" | "sentinel" | "boss";
+export type EnemyKind =
+  | "moth"
+  | "husk"
+  | "sentinel"
+  | "boss"
+  | "diver"
+  | "leech"
+  | "ashwalker"
+  | "warden"
+  | "cantor"
+  | "ashknight";
 export interface Enemy extends Rect {
   id: string;
   kind: EnemyKind;
@@ -21,6 +31,8 @@ export interface Enemy extends Rect {
   phase: number;
   pattern: number;
   hitPlayer: boolean;
+  targetX: number;
+  attackDir: number;
 }
 export interface Platform extends Rect {
   kind?: "stone" | "wood" | "root" | "moving";
@@ -30,7 +42,7 @@ export interface Exit {
   side: "left" | "right" | "up" | "down";
   to: string;
   spawn: [number, number];
-  gate?: "dash" | "puzzle";
+  gate?: "dash" | "puzzle" | "tide" | "ember" | "sluice" | "forge";
   label?: string;
 }
 export interface Prop {
@@ -42,7 +54,12 @@ export interface Prop {
     | "upgrade"
     | "gate"
     | "flowers"
-    | "arch";
+    | "arch"
+    | "valve"
+    | "switch"
+    | "fragment"
+    | "relic"
+    | "vent";
   x: number;
   y: number;
   id?: string;
@@ -57,11 +74,13 @@ export interface Room {
   width: number;
   height: number;
   platforms: Platform[];
-  hazards: Rect[];
+  hazards: (Rect & { type?: "heat" })[];
   enemies: { kind: EnemyKind; x: number; y: number; id: string }[];
   props: Prop[];
   exits: Exit[];
   tone: number;
+  region?: "grove" | "drowned" | "ashen";
+  water?: { y: number; levels?: number[]; control?: string };
 }
 export interface Player extends Rect {
   vx: number;
@@ -98,7 +117,7 @@ export interface Shot extends Rect {
   vy: number;
   life: number;
   friendly: boolean;
-  type: "orb" | "wave";
+  type: "orb" | "wave" | "flame";
   damage: number;
 }
 export interface Particle {
@@ -121,6 +140,13 @@ export interface SaveData {
   currency: number;
   dash: boolean;
   bossDefeated: boolean;
+  bosses: string[];
+  tide: boolean;
+  ember: boolean;
+  switches: Record<string, number>;
+  quests: string[];
+  relics: string[];
+  equipped: string | null;
   puzzleSolved: boolean;
   discovered: string[];
   collected: string[];

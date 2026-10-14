@@ -54,6 +54,7 @@ export function movePlayer(
   platforms: Platform[],
   dt: number,
   dashUnlocked: boolean,
+  swimming = false,
 ): { jump: boolean; land: boolean; dash: boolean } {
   const out = { jump: false, land: false, dash: false };
   const wasGrounded = p.grounded;
@@ -102,9 +103,18 @@ export function movePlayer(
       p.heal ? 0 : axis * 310,
       dt * (p.grounded ? 2400 : 1250),
     );
-    if (p.vy < 0 && !input.down("jump") && p.jumpGrace <= 0) p.vy += 2300 * dt;
-    p.vy = Math.min(1000, p.vy + (p.vy > 0 ? 2050 : 1650) * dt);
-    if (p.wall && axis && p.vy > 125) p.vy = 125;
+    if (swimming) {
+      const vertical =
+        Number(input.down("down")) -
+        Number(input.down("up") || input.down("jump"));
+      p.vy = approach(p.vy, vertical ? vertical * 250 : -25, dt * 1100);
+      p.airDash = true;
+    } else {
+      if (p.vy < 0 && !input.down("jump") && p.jumpGrace <= 0)
+        p.vy += 2300 * dt;
+      p.vy = Math.min(1000, p.vy + (p.vy > 0 ? 2050 : 1650) * dt);
+      if (p.wall && axis && p.vy > 125) p.vy = 125;
+    }
   }
   p.x += p.vx * dt;
   p.wall = 0;

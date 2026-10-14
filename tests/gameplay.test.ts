@@ -155,7 +155,7 @@ test("all implemented room exits refer to real rooms and valid spawn locations",
       assert.ok(e.spawn[1] >= 0 && e.spawn[1] < rooms[e.to].height);
     }
   }
-  assert.equal(Object.keys(rooms).length, 9);
+  assert.equal(Object.keys(rooms).length, 25);
 });
 test("versioned save slots persist progression and reject corrupt data", () => {
   const memory = new Map<string, string>();

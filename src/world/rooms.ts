@@ -1,3 +1,4 @@
+import { expansionRooms } from "./expansion.ts";
 import type { Room, Platform } from "../core/types.ts";
 const floor = (x = 0, w = 1920, y = 730): Platform => ({
   x,
@@ -355,6 +356,13 @@ export const rooms: Record<string, Room> = {
     exits: [{ side: "left", to: "bell", spawn: [1730, 640] }],
   },
 };
+Object.assign(rooms, expansionRooms);
+rooms.afterglow.exits.push({
+  side: "right",
+  to: "tidevestibule",
+  spawn: [80, 662],
+  gate: "dash",
+});
 export const bellSequence = [0, 2, 1];
 export function ringBell(
   progress: number[],

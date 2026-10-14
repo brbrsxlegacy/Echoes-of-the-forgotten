@@ -1,3 +1,5 @@
+import { isBoss } from "../world/regions.ts";
+import { updateRegionBoss } from "./region-bosses.ts";
 import {
   overlaps,
   clamp,
@@ -18,15 +20,37 @@ export function makeEnemy(
   y: number,
   id: string,
 ): Enemy {
-  const boss = kind === "boss";
-  const maxHp = boss ? 48 : kind === "sentinel" ? 5 : 3;
+  const boss = isBoss(kind);
+  const maxHp =
+    kind === "cantor"
+      ? 60
+      : kind === "ashknight"
+        ? 72
+        : boss
+          ? 48
+          : ["sentinel", "diver"].includes(kind)
+            ? 5
+            : kind === "warden"
+              ? 6
+              : kind === "ashwalker"
+                ? 4
+                : 3;
   return {
     id,
     kind,
     x,
     y,
-    w: boss ? 144 : kind === "moth" ? 54 : 48,
-    h: boss ? 240 : kind === "sentinel" ? 90 : 60,
+    w: boss ? 144 : ["moth", "leech"].includes(kind) ? 54 : 48,
+    h:
+      kind === "cantor"
+        ? 215
+        : kind === "ashknight"
+          ? 230
+          : boss
+            ? 240
+            : ["sentinel", "diver", "warden"].includes(kind)
+              ? 90
+              : 60,
     hp: maxHp,
     maxHp,
     vx: 0,
@@ -40,6 +64,8 @@ export function makeEnemy(
     phase: 1,
     pattern: 0,
     hitPlayer: false,
+    targetX: x,
+    attackDir: -1,
   };
 }
 export function hurtPlayer(
@@ -49,7 +75,7 @@ export function hurtPlayer(
   assist: boolean,
 ): boolean {
   if (p.invuln > 0 || p.dash > 0 || p.parry > 0) return false;
-  p.hp = Math.max(0, p.hp - (assist ? 0.5 : damage));
+  p.hp = Math.max(0, p.hp - (assist ? damage * 0.5 : damage));
   p.invuln = 1.3;
   p.vx = (p.x < sourceX ? -1 : 1) * 370;
   p.vy = -280;
@@ -82,14 +108,14 @@ export function strike(
     e.hp = Math.max(0, e.hp - damage);
     e.hurt = 0.18;
     p.energy = clamp(p.energy + 12, 0, p.maxEnergy);
-    if (e.kind !== "boss") e.x += p.dir * 14;
+    if (!isBoss(e.kind)) e.x += p.dir * 14;
     if (pogo) p.vy = -570;
     events.push({ type: "hit", x: e.x + e.w / 2, y: e.y + e.h / 2 });
     if (e.hp === 0) {
       e.state = "dead";
       e.timer = 0.7;
       events.push({
-        type: e.kind === "boss" ? "boss-defeat" : "kill",
+        type: isBoss(e.kind) ? "boss-defeat" : "kill",
         x: e.x,
         y: e.y,
         kind: e.kind,
@@ -104,6 +130,7 @@ export function updateEnemies(
   dt: number,
   shots: Shot[],
   assist: boolean,
+  defence = 1,
 ): CombatEvent[] {
   const events: CombatEvent[] = [];
   for (const e of enemies) {
@@ -115,7 +142,9 @@ export function updateEnemies(
     e.dir = p.x < e.x ? -1 : 1;
     const emit = (type: CombatEvent["type"]) =>
       events.push({ type, x: e.x + e.w / 2, y: e.y + e.h / 2, kind: e.kind });
-    if (e.kind === "moth") {
+    if (e.kind === "cantor" || e.kind === "ashknight") {
+      events.push(...updateRegionBoss(e, p, dt, shots, assist, defence));
+    } else if (e.kind === "moth" || e.kind === "leech") {
       e.y += Math.sin(e.age * 2.1) * dt * 27;
       if (e.state === "idle") {
         e.x += Math.sin(e.age * 0.9) * dt * 24;
@@ -133,15 +162,15 @@ export function updateEnemies(
           y: e.y + 25,
           w: 18,
           h: 18,
-          vx: (dx / len) * 240,
-          vy: (dy / len) * 240,
+          vx: (dx / len) * (e.kind === "leech" ? 285 : 240),
+          vy: (dy / len) * (e.kind === "leech" ? 285 : 240),
           life: 5,
           friendly: false,
           type: "orb",
           damage: 1,
         });
         e.state = "idle";
-        e.timer = 2.8;
+        e.timer = e.kind === "leech" ? 2.1 : 2.8;
       }
     } else if (e.kind === "boss") {
       e.phase = e.hp <= e.maxHp * 0.3 ? 3 : e.hp <= e.maxHp * 0.65 ? 2 : 1;
@@ -220,7 +249,7 @@ export function updateEnemies(
             e.hp = Math.max(1, e.hp - 2);
             p.energy = clamp(p.energy + 20, 0, p.maxEnergy);
             emit("parry");
-          } else if (hurtPlayer(p, 1, e.x, assist))
+          } else if (hurtPlayer(p, defence, e.x, assist))
             events.push({ type: "hurt", x: p.x, y: p.y });
         }
         if (e.timer <= 0) {
@@ -233,20 +262,47 @@ export function updateEnemies(
       }
     } else {
       if (e.state === "idle") {
-        const speed = e.kind === "sentinel" ? 55 : 32;
+        const speed =
+          e.kind === "ashwalker"
+            ? 75
+            : ["sentinel", "diver", "warden"].includes(e.kind)
+              ? 55
+              : 32;
         if (distance < 370) e.x += e.dir * speed * dt;
         else e.x = e.home + Math.sin(e.age * 0.6) * 55;
         e.x = clamp(e.x, e.home - 160, e.home + 160);
         if (distance < 130 && e.timer <= 0) {
           e.state = "windup";
-          e.timer = e.kind === "sentinel" ? 0.7 : 0.85;
+          e.timer =
+            e.kind === "diver"
+              ? 0.65
+              : e.kind === "warden"
+                ? 1.0
+                : e.kind === "sentinel"
+                  ? 0.7
+                  : 0.85;
+          e.attackDir = e.dir;
           e.hitPlayer = false;
           emit("telegraph");
         }
       } else if (e.state === "windup" && e.timer <= 0) {
         e.state = "attack";
         e.timer = 0.23;
-        if (e.kind === "sentinel") e.x += e.dir * 45;
+        if (["sentinel", "diver"].includes(e.kind))
+          e.x += e.attackDir * (e.kind === "diver" ? 70 : 45);
+        if (e.kind === "ashwalker")
+          shots.push({
+            x: e.x + e.attackDir * 70,
+            y: 660,
+            w: 55,
+            h: 70,
+            vx: 0,
+            vy: 0,
+            life: 1.4,
+            friendly: false,
+            type: "flame",
+            damage: 1,
+          });
       } else if (e.state === "attack") {
         const box = {
           x: e.dir > 0 ? e.x : e.x - 65,
@@ -262,7 +318,7 @@ export function updateEnemies(
             e.hurt = 0.3;
             p.energy = clamp(p.energy + 20, 0, p.maxEnergy);
             emit("parry");
-          } else if (hurtPlayer(p, 1, e.x, assist))
+          } else if (hurtPlayer(p, defence, e.x, assist))
             events.push({ type: "hurt", x: p.x, y: p.y });
         }
         if (e.timer <= 0) {
@@ -281,16 +337,16 @@ export function updateEnemies(
     s.y += s.vy * dt;
     s.life -= dt;
     if (!s.friendly && overlaps(s, p)) {
-      if (p.parry > 0) {
+      if (p.parry > 0 && s.type !== "flame") {
         s.friendly = true;
         s.vx = -(s.vx || 220);
         s.vy = -s.vy;
         p.energy = clamp(p.energy + 10, 0, p.maxEnergy);
         events.push({ type: "parry", x: p.x, y: p.y });
       } else if (p.dash <= 0) {
-        if (hurtPlayer(p, s.damage, s.x, assist))
+        if (hurtPlayer(p, s.damage * defence, s.x, assist))
           events.push({ type: "hurt", x: p.x, y: p.y });
-        s.life = 0;
+        if (s.type !== "flame") s.life = 0;
       }
     }
     if (s.friendly)
@@ -304,7 +360,7 @@ export function updateEnemies(
             e.state = "dead";
             e.timer = 0.7;
             events.push({
-              type: e.kind === "boss" ? "boss-defeat" : "kill",
+              type: isBoss(e.kind) ? "boss-defeat" : "kill",
               x: e.x,
               y: e.y,
               kind: e.kind,
